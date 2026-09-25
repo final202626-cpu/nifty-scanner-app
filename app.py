@@ -6,61 +6,71 @@ import time
 import pyotp
 import requests
 import base64
+import os
 from urllib.parse import urlparse, parse_qs
 
 # ==========================================
-# 1. CREDENTIALS (YAHAN APNI DETAILS DAALO)
+# 1. CREDENTIALS
 # ==========================================
 FY_ID = "XS39623"
 PIN = "2112"
-TOTP_KEY = "NKFQBHN5K4RSNOM5LZP4NW7AJ23KSBAN"    # Bina kisi space ke daalna
+TOTP_KEY = "NKFQBHN5K4RSNOM5LZP4NW7AJ23KSBAN"
 CLIENT_ID = "7VPVG6SDK8-100"
 SECRET_KEY = "FWPRTCV2S2"
 REDIRECT_URI = "https://127.0.0.1"
 
 # ==========================================
-# 2. CLOUD AUTO-LOGIN ENGINE (NO MAGAJMARI)
+# 2. BULLETPROOF AUTO-LOGIN ENGINE
 # ==========================================
-@st.cache_data(ttl=36000) # Token ko 10 ghante tak cloud memory me save rakhega
-def get_fyers_token():
+def cloud_auto_login():
     try:
         ses = requests.Session()
-        ses.headers.update({"User-Agent": "Mozilla/5.0"})
+        ses.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
         
-        # A. OTP Request
+        # Step A: OTP Request
         res1 = ses.post("https://api-t2.fyers.in/vagator/v2/send_login_otp_v2", 
-                       json={"fy_id": base64.b64encode(f"{FY_ID}".encode()).decode(), "app_id": "2"}).json()
+                       json={"fy_id": base64.b64encode(f"{FY_ID}".encode()).decode(), "app_id": "2"})
+        if res1.status_code != 200: return f"Fyers Blocked Streamlit IP (HTTP {res1.status_code})"
         
-        # B. Verify TOTP (Cloud servers have perfect time)
+        r1 = res1.json()
+        if r1.get("s") != "ok": return f"Step 1 Failed: {r1}"
+        
+        # Step B: TOTP Verification
         clean_key = TOTP_KEY.replace(" ", "").strip().upper()
         totp = pyotp.TOTP(clean_key).now()
-        res2 = ses.post("https://api-t2.fyers.in/vagator/v2/verify_otp", 
-                       json={"request_key": res1["request_key"], "otp": totp}).json()
+        r2 = ses.post("https://api-t2.fyers.in/vagator/v2/verify_otp", 
+                       json={"request_key": r1["request_key"], "otp": totp}).json()
+        if r2.get("s") != "ok": return f"Step 2 (TOTP) Failed: {r2}"
         
-        # C. Verify PIN
-        res3 = ses.post("https://api-t2.fyers.in/vagator/v2/verify_pin_v2", 
-                       json={"request_key": res2["request_key"], "identity_type": "pin", 
+        # Step C: PIN Verification
+        r3 = ses.post("https://api-t2.fyers.in/vagator/v2/verify_pin_v2", 
+                       json={"request_key": r2["request_key"], "identity_type": "pin", 
                              "identifier": base64.b64encode(f"{PIN}".encode()).decode()}).json()
-        token = res3["data"]["access_token"]
+        if r3.get("s") != "ok": return f"Step 3 (PIN) Failed: {r3}"
+        token = r3["data"]["access_token"]
         
-        # D. Get Auth Code
+        # Step D: Auth Code
         auth_req = {"fyers_id": FY_ID, "app_id": CLIENT_ID[:-4], "redirect_uri": REDIRECT_URI, 
                     "appType": "100", "code_challenge": "", "state": "None", "scope": "", 
                     "nonce": "", "response_type": "code", "create_cookie": True}
         ses.headers.update({"authorization": f"Bearer {token}"})
-        res4 = ses.post("https://api.fyers.in/api/v2/generate-authcode", json=auth_req).json()
-        auth_code = parse_qs(urlparse(res4["auth_code"]).query)['auth_code'][0]
+        r4 = ses.post("https://api.fyers.in/api/v2/generate-authcode", json=auth_req).json()
+        if "auth_code" not in r4: return f"Step 4 (Auth) Failed: {r4}"
+        auth_code = parse_qs(urlparse(r4["auth_code"]).query)['auth_code'][0]
         
-        # E. Generate Final Token
+        # Step E: Final Token
         session = fyersModel.SessionModel(client_id=CLIENT_ID, secret_key=SECRET_KEY, 
                                           redirect_uri=REDIRECT_URI, response_type="code", grant_type="authorization_code")
         session.set_token(auth_code)
-        return session.generate_token()['access_token']
+        final = session.generate_token()
+        if final.get("s") != "ok": return f"Step 5 (Final Token) Failed: {final}"
+        
+        return final['access_token']
     except Exception as e:
-        return None
+        return f"Code Error: {e}"
 
 # ==========================================
-# 3. FETCH NIFTY DATA
+# 3. FETCH DATA FUNCTION
 # ==========================================
 def get_fyers_data(access_token):
     try:
@@ -92,13 +102,38 @@ def get_fyers_data(access_token):
 st.set_page_config(page_title="Nifty Scanner", layout="centered")
 st.title("📈 Nifty 50 Smart Engine")
 
-access_token = get_fyers_token()
+# Smart Session Management (Replaces bug-prone cache)
+if "access_token" not in st.session_state:
+    st.session_state.access_token = None
+    st.session_state.login_msg = ""
 
-if access_token:
+if not st.session_state.access_token:
+    status = cloud_auto_login()
+    
+    # Agar status lamba token hai (yani successful)
+    if status and not status.startswith("Fyers") and not status.startswith("Step") and not status.startswith("Code"):
+        st.session_state.access_token = status
+        st.session_state.login_msg = "✅ Cloud Auto-Login Successful!"
+    else:
+        # Fallback Backup - Aapki uploaded token file use karega
+        if os.path.exists("fyers_token_2.txt"):
+            with open("fyers_token_2.txt", "r") as f:
+                st.session_state.access_token = f.read().strip()
+            st.session_state.login_msg = f"⚠️ Auto-Login Blocked by Fyers. But BACKUP TOKEN is Active!"
+        else:
+            st.session_state.login_msg = f"❌ Login Failed Details: {status}"
+
+# Render UI Loop
+if st.session_state.access_token:
     placeholder = st.empty()
     while True:
-        df = get_fyers_data(access_token)
+        df = get_fyers_data(st.session_state.access_token)
         with placeholder.container():
+            if "⚠️" in st.session_state.login_msg:
+                st.warning(st.session_state.login_msg)
+            else:
+                st.success(st.session_state.login_msg)
+                
             if df is not None:
                 ltp = df['close'].iloc[-1]
                 cv = df['current_volume'].iloc[-1]
@@ -109,10 +144,9 @@ if access_token:
                 col3.metric("Previous Vol", "Coming Soon")
                 col4.metric("Difference", f"{(ltp - cv):.2f}")
                 
-                st.success("✅ Cloud Auto-Login Successful! Ready for Sniper Logic.")
                 st.caption(f"Last Updated: {datetime.now().strftime('%I:%M:%S %p')}")
             else:
-                st.warning("Market is closed or data fetching delayed.")
+                st.error("Data missing or Market Closed (Token ho sakta hai expire ho gaya ho).")
         time.sleep(10)
 else:
-    st.error("Login Failed. Please check Credentials in code.")
+    st.error(st.session_state.login_msg)
