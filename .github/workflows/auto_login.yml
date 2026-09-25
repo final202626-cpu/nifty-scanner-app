@@ -2,7 +2,6 @@ name: Daily Fyers Auto Login
 
 on:
   schedule:
-    # Mon-Fri 03:25 UTC = 08:55 AM IST
     - cron: '25 3 * * 1-5'
   workflow_dispatch:
 
@@ -29,6 +28,7 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git pull origin main --rebase || true
           git add fyers_token.txt
           git diff --quiet && git diff --staged --quiet || git commit -m "Auto Updated Daily Token"
           git push
