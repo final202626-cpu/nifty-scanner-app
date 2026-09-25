@@ -11,10 +11,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      # YE HAI ASLI FIX: ref: main
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          ref: main
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -22,8 +23,7 @@ jobs:
           python-version: '3.10'
 
       - name: Install Dependencies
-        run: |
-          pip install requests pyotp fyers-apiv3
+        run: pip install requests pyotp fyers-apiv3
 
       - name: Generate Fyers Token
         run: python generate_token.py
@@ -33,5 +33,5 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add fyers_token.txt
-          git commit -m "Auto Updated Daily Token" || exit 0
-          git push origin HEAD:main --force
+          git commit -m "Auto Updated Daily Token" || echo "No changes to commit"
+          git push origin main
