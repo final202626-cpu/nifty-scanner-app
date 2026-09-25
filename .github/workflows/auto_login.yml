@@ -1,0 +1,34 @@
+name: Daily Fyers Auto Login
+
+on:
+  schedule:
+    # Mon-Fri 03:25 UTC = 08:55 AM IST
+    - cron: '25 3 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  fyers-login:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          pip install requests pyotp fyers-apiv3
+
+      - name: Generate Fyers Token
+        run: python generate_token.py
+
+      - name: Save Token To Repository
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add fyers_token.txt
+          git diff --quiet && git diff --staged --quiet || git commit -m "Auto Updated Daily Token"
+          git push
