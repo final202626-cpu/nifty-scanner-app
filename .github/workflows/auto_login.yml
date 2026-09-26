@@ -28,17 +28,17 @@ jobs:
       - name: Generate Token
         run: python generate_token.py
 
-      - name: Safe Push To GitHub
+      - name: Save Token To Repository
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          # Pehle token ko locally save (commit) karo
+          # Pehle naye generated token ko stage karo
           git add fyers_token.txt
           git commit -m "Auto Update Token" || echo "No changes to commit"
           
-          # Nayi files ko pull karke apne token ko sabse upar (rebase) rakho
-          git pull origin main --rebase
+          # Remote changes ko auto-stash aur rebase ke sath pull karo
+          git pull origin main --rebase --autostash
           
-          # Ab safely push karo (Koi rejection nahi hoga)
+          # Safely push karo
           git push origin main
