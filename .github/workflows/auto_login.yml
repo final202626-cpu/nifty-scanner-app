@@ -13,9 +13,6 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -25,20 +22,8 @@ jobs:
       - name: Install Dependencies
         run: pip install requests pyotp fyers-apiv3
 
-      - name: Generate Token
+      - name: Generate Token & Save via API
+        env:
+          # Python script ko direct save karne ke liye token pass kiya hai
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python generate_token.py
-
-      - name: Save Token To Repository
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Pehle naye generated token ko stage karo
-          git add fyers_token.txt
-          git commit -m "Auto Update Token" || echo "No changes to commit"
-          
-          # Remote changes ko auto-stash aur rebase ke sath pull karo
-          git pull origin main --rebase --autostash
-          
-          # Safely push karo
-          git push origin main
