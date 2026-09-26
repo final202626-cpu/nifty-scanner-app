@@ -24,6 +24,5 @@ jobs:
 
       - name: Generate Token & Save via API
         env:
-          # Python script ko direct save karne ke liye token pass kiya hai
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python generate_token.py
