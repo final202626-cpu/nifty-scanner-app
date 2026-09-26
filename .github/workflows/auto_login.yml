@@ -14,7 +14,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          ref: main
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -27,21 +27,8 @@ jobs:
       - name: Generate Token
         run: python generate_token.py
 
-      - name: Force Fix Git Conflict & Push
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Naye token ko safe jagah chupa do (stash)
-          git stash
-          
-          # Remote server se sab kuch zabardasti barabar karo (rebase)
-          git pull origin main --rebase
-          
-          # Chupaye hue token ko wapas bahar nikalo aur overwrite karo
-          git stash pop || true
-          
-          # Ab bina kisi conflict ke push karo
-          git add fyers_token.txt
-          git commit -m "Auto Update Token" || echo "No changes to commit"
-          git push origin main
+      - name: Magic Auto-Commit Plugin (No Git Errors)
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Auto Update Fyers Token"
+          file_pattern: "fyers_token.txt"
