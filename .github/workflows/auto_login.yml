@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -22,7 +24,24 @@ jobs:
       - name: Install Dependencies
         run: pip install requests pyotp fyers-apiv3
 
-      - name: Generate Token & Save via API
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate Token
         run: python generate_token.py
+
+      - name: Force Fix Git Conflict & Push
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Naye token ko safe jagah chupa do (stash)
+          git stash
+          
+          # Remote server se sab kuch zabardasti barabar karo (rebase)
+          git pull origin main --rebase
+          
+          # Chupaye hue token ko wapas bahar nikalo aur overwrite karo
+          git stash pop || true
+          
+          # Ab bina kisi conflict ke push karo
+          git add fyers_token.txt
+          git commit -m "Auto Update Token" || echo "No changes to commit"
+          git push origin main
